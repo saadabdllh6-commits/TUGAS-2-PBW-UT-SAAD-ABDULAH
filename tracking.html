@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="id">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>SITTA UT — Tracking DO</title><link rel="stylesheet" href="css/style.css"></head>
+<body>
+<header class="topbar"><a class="brand" href="index.html"><span class="brand-mark">UT</span><span><b>SITTA</b><small>Sistem Informasi Bahan Ajar</small></span></a><nav><a href="index.html">Beranda</a><a href="stok.html">Stok Bahan Ajar</a><a class="active" href="tracking.html">Tracking DO</a></nav></header>
+<main id="tracking-app" class="page-shell">
+  <div class="page-heading"><div><div class="eyebrow">PENGIRIMAN DAN DISTRIBUSI</div><h1>Tracking delivery order</h1><p>Buat pesanan bahan ajar dan lihat ringkasan status pengirimannya.</p></div><button class="btn btn-primary" @click="showForm = !showForm">{{ showForm ? 'Tutup formulir' : '＋ Buat DO baru' }}</button></div>
+  <section class="stats-grid three-stats"><div class="stat-card"><span>Total delivery order</span><strong>{{ daftarDO.length }}</strong><small>Termasuk data simulasi</small></div><div class="stat-card"><span>Dalam perjalanan</span><strong class="text-blue">{{ jumlahDalamPerjalanan }}</strong><small>Pesanan sedang dikirim</small></div><div class="stat-card"><span>Total nilai pesanan</span><strong>{{ formatRupiah(totalNilai) }}</strong><small>Akumulasi semua DO</small></div></section>
+  <section class="panel" v-if="showForm">
+    <div class="panel-head"><div><h2>Buat delivery order</h2><p>Nomor DO dibuat otomatis mengikuti tahun berjalan dan urutan data.</p></div></div>
+    <form class="form-grid" @submit.prevent="buatDO">
+      <label>Nomor DO <input :value="nomorBerikutnya" disabled><small class="field-hint">Dibuat otomatis oleh sistem</small></label>
+      <label>NIM pemesan<input v-model.trim="form.nim" required pattern="[0-9]{8,15}" title="NIM terdiri dari 8–15 angka" placeholder="Masukkan NIM"></label>
+      <label>Nama pemesan<input v-model.trim="form.nama" required minlength="2" maxlength="100" placeholder="Nama lengkap"></label>
+      <label>Ekspedisi<select v-model="form.ekspedisi" required><option disabled value="">Pilih ekspedisi</option><option v-for="e in pengirimanList" :key="e.kode" :value="e.nama">{{ e.nama }}</option></select></label>
+      <label class="full-width">Paket bahan ajar<select v-model="form.paketKode" required><option disabled value="">Pilih paket bahan ajar</option><option v-for="p in paket" :key="p.kode" :value="p.kode">{{ p.kode }} — {{ p.nama }} ({{ formatRupiah(p.harga) }})</option></select></label>
+      <div class="package-detail full-width" v-if="paketTerpilih"><div><span class="detail-label">PAKET DIPILIH</span><h3>{{ paketTerpilih.nama }}</h3><p>Kode paket: {{ paketTerpilih.kode }}</p></div><div><span class="detail-label">TOTAL HARGA</span><strong>{{ formatRupiah(paketTerpilih.harga) }}</strong></div><div class="package-items"><span class="detail-label">ISI PAKET</span><span v-for="kode in paketTerpilih.isi" :key="kode" class="package-chip">{{ kode }} · {{ judulMataKuliah(kode) }}</span></div></div>
+      <label>Tanggal kirim<input type="date" v-model="form.tanggalKirim" required></label>
+      <label>Total harga<input :value="paketTerpilih ? formatRupiah(paketTerpilih.harga) : 'Pilih paket terlebih dahulu'" disabled></label>
+      <div class="form-actions full-width"><button type="button" class="btn btn-light" @click="resetForm">Reset</button><button class="btn btn-primary" type="submit">Simpan delivery order</button></div>
+    </form>
+    <p v-if="formError" class="form-error">{{ formError }}</p>
+  </section>
+  <section class="panel">
+    <div class="panel-head"><div><h2>Daftar delivery order</h2><p>Pilih salah satu DO untuk melihat detail perjalanan.</p></div><span class="result-count">{{ daftarDO.length }} pesanan</span></div>
+    <div class="toolbar"><label class="search-box"><span>⌕</span><input v-model.trim="searchText" placeholder="Cari nomor DO, NIM, atau nama…"></label><label class="inline-filter">Status <select v-model="filterStatus"><option value="">Semua status</option><option>Dalam Perjalanan</option><option>Diproses</option><option>Terkirim</option></select></label></div>
+    <div class="table-wrap"><table><thead><tr><th>Nomor DO</th><th>Pemesan</th><th>Paket</th><th>Ekspedisi</th><th>Tanggal kirim</th><th>Total</th><th>Status</th><th>Detail</th></tr></thead><tbody>
+      <tr v-for="doItem in filteredDO" :key="doItem.nomor"><td><b class="course-code">{{ doItem.nomor }}</b></td><td><b>{{ doItem.nama }}</b><span class="course-title">NIM {{ doItem.nim }}</span></td><td>{{ doItem.paket }}</td><td>{{ doItem.ekspedisi }}</td><td>{{ formatTanggal(doItem.tanggalKirim) }}</td><td>{{ formatRupiah(doItem.total) }}</td><td><span class="status-pill" :class="doItem.status === 'Terkirim' ? 'status-safe' : (doItem.status === 'Dalam Perjalanan' ? 'status-warn' : 'status-info')">{{ doItem.status }}</span></td><td><button class="btn btn-light btn-sm" @click="pilihDO(doItem)">Lihat</button></td></tr>
+      <tr v-if="filteredDO.length === 0"><td colspan="8" class="empty-state">Data DO tidak ditemukan.</td></tr>
+    </tbody></table></div>
+  </section>
+  <section class="panel detail-panel" v-if="selectedDO"><div class="panel-head"><div><div class="eyebrow">DETAIL PENGIRIMAN</div><h2>{{ selectedDO.nomor }}</h2><p>{{ selectedDO.nama }} · NIM {{ selectedDO.nim }}</p></div><button class="icon-button" @click="selectedDO = null">×</button></div>
+    <div class="detail-summary"><div><span class="detail-label">PAKET</span><b>{{ selectedDO.paket }}</b></div><div><span class="detail-label">EKSPEDISI</span><b>{{ selectedDO.ekspedisi }}</b></div><div><span class="detail-label">TANGGAL KIRIM</span><b>{{ formatTanggal(selectedDO.tanggalKirim) }}</b></div><div><span class="detail-label">TOTAL</span><b>{{ formatRupiah(selectedDO.total) }}</b></div></div>
+    <h3 class="timeline-title">Riwayat perjalanan</h3><div class="timeline"><div class="timeline-item" v-for="(event, index) in selectedDO.perjalanan" :key="event.waktu + index"><span class="timeline-dot"></span><div><b>{{ event.keterangan }}</b><small>{{ event.waktu }}</small></div></div><div v-if="!selectedDO.perjalanan || !selectedDO.perjalanan.length" class="muted">Belum ada riwayat perjalanan yang tersedia.</div></div>
+  </section>
+  <div class="toast" v-if="toastMessage">{{ toastMessage }}</div><footer class="footer">SITTA UT · Data dummy sesuai lampiran tugas <span>Tracking Delivery Order</span></footer>
+</main>
+<script src="https://unpkg.com/vue@2.7.16/dist/vue.js"></script><script src="js/dataBahanAjar.js"></script><script src="js/tracking-app.js"></script>
+</body></html>
